@@ -1,0 +1,82 @@
+:root {
+  --ink: #1d2433;
+  --muted: #5b6475;
+  --line: #dfe3ea;
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --brand: #0f6e6a;
+  --brand-ink: #ffffff;
+  --user: #e6f2f1;
+  --radius: 12px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-size: 17px; line-height: 1.5; }
+main { max-width: 760px; margin: 0 auto; padding: 16px; }
+
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; color: var(--brand); }
+.brand span { font-weight: 400; color: var(--muted); font-size: 14px; margin-inline-start: 6px; }
+
+h1 { font-size: 24px; margin: 16px 0; }
+h2 { font-size: 19px; margin: 0 0 8px; }
+
+button { font: inherit; cursor: pointer; border-radius: 10px; padding: 10px 16px; min-height: 44px; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.primary { background: var(--brand); color: var(--brand-ink); border: 0; }
+.secondary { background: var(--card); color: var(--brand); border: 1px solid var(--brand); }
+.link-btn { background: none; border: 0; color: #a3271f; text-decoration: underline; min-height: auto; padding: 4px; }
+button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px solid #f0b429; outline-offset: 2px; }
+
+.lang-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.lang-grid button { background: var(--card); border: 1px solid var(--line); color: var(--ink); font-size: 18px; min-height: 64px; }
+
+.consent { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 16px 16px 36px; }
+[dir="rtl"] .consent { padding: 16px 36px 16px 16px; }
+.consent li { margin: 6px 0; }
+.agree { display: flex; gap: 10px; align-items: center; margin: 16px 0; font-weight: 600; }
+.agree input { width: 22px; height: 22px; }
+
+.messages { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.msg { max-width: 85%; padding: 10px 14px; border-radius: var(--radius); white-space: pre-wrap; word-wrap: break-word; }
+.msg.assistant { background: var(--card); border: 1px solid var(--line); align-self: flex-start; }
+.msg.user { background: var(--user); align-self: flex-end; }
+
+.composer { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: 0; background: var(--bg); padding: 8px 0; }
+.composer textarea { flex: 1; font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 10px; resize: vertical; }
+.status { color: var(--muted); min-height: 1.5em; font-size: 15px; }
+#micBtn.on { background: #a3271f; color: #fff; border-color: #a3271f; }
+
+.confirm { background: #fffbe8; border: 1px solid #f0d78c; border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.confirm p { white-space: pre-wrap; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+.tab { background: var(--card); border: 1px solid var(--line); color: var(--ink); }
+.tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+.cv { background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 32px; font-size: 15px; }
+.cv h1 { font-size: 26px; margin: 0; }
+.cv .headline { color: var(--brand); font-weight: 600; margin: 2px 0 6px; }
+.cv .meta { color: var(--muted); margin-bottom: 12px; }
+.cv h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .05em; color: var(--brand); border-bottom: 1px solid var(--line); padding-bottom: 4px; margin: 18px 0 8px; }
+.cv .item { margin-bottom: 10px; }
+.cv .item strong { display: block; }
+.cv .item .sub { color: var(--muted); font-size: 14px; }
+.cv ul { margin: 4px 0; padding-inline-start: 20px; }
+.cv .note { margin-top: 24px; font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+
+.linkedin textarea { width: 100%; font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
+
+@media print {
+  body { background: #fff; }
+  .topbar, .tabs, .no-print, #cvTitle { display: none !important; }
+  main { padding: 0; max-width: none; }
+  .cv { border: 0; padding: 0; }
+}
