@@ -14,6 +14,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; font-size: 17px; line-height: 1.5; }
 main { max-width: 760px; margin: 0 auto; padding: 16px; }
 
@@ -50,6 +51,19 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px
 
 .composer { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: 0; background: var(--bg); padding: 8px 0; }
 .composer textarea { flex: 1; font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 10px; resize: vertical; }
+.chat-tools { display: flex; justify-content: flex-end; margin: 8px 0; }
+.msg.assistant { position: relative; padding-inline-end: 44px; }
+.replay { position: absolute; inset-inline-end: 4px; top: 4px; min-height: 36px; padding: 4px 8px; background: none; border: 0; font-size: 18px; }
+.finish { width: 100%; margin-bottom: 8px; }
+#consentListen { margin-bottom: 8px; }
+.callbar { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; background: var(--brand); color: #fff; padding: 10px; border-radius: var(--radius); margin-bottom: 10px; }
+.callstatus { flex: 1; background: none; border: 0; color: #fff; text-align: start; font-size: 17px; }
+.hangup { background: #c0392b; color: #fff; border: 0; }
+.recbar { display: flex; gap: 8px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; margin-bottom: 6px; }
+.recbar .preview { flex: 1; color: var(--muted); font-style: italic; }
+.recbar .dot { width: 12px; height: 12px; border-radius: 50%; background: #c0392b; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+#micBtn { font-size: 20px; min-width: 52px; }
 .status { color: var(--muted); min-height: 1.5em; font-size: 15px; }
 #micBtn.on { background: #a3271f; color: #fff; border-color: #a3271f; }
 
