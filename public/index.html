@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fikra Guide · verified work profiles for migrants</title>
+  <meta name="description" content="Fikra Guide: an AI agent that interviews migrants in their own language and drafts a CV in Portuguese and English, reviewed by a human.">
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Fikra Guide <span>verified work profiles for migrants</span></div>
+    <button id="deleteAll" class="link-btn" hidden></button>
+  </header>
+
+  <main>
+    <!-- 1. Idioma -->
+    <section id="screen-lang" class="screen">
+      <h1 id="chooseLang">Choose your language · Elige tu idioma · Escolha seu idioma</h1>
+      <div id="langButtons" class="lang-grid"></div>
+    </section>
+
+    <!-- 2. Consentimento -->
+    <section id="screen-consent" class="screen" hidden>
+      <h1 id="consentTitle"></h1>
+      <ul id="consentList" class="consent"></ul>
+      <label class="agree"><input type="checkbox" id="agreeBox"> <span id="agreeText"></span></label>
+      <button id="startBtn" class="primary" disabled></button>
+    </section>
+
+    <!-- 3. Conversa -->
+    <section id="screen-chat" class="screen" hidden>
+      <div id="messages" class="messages" aria-live="polite"></div>
+
+      <div id="confirmCard" class="confirm" hidden>
+        <h2 id="confirmTitle"></h2>
+        <p id="confirmSummary"></p>
+        <div class="row">
+          <button id="listenBtn" class="secondary"></button>
+          <button id="fixBtn" class="secondary"></button>
+          <button id="yesBtn" class="primary"></button>
+        </div>
+      </div>
+
+      <form id="composer" class="composer">
+        <button type="button" id="micBtn" class="secondary" aria-label="mic"></button>
+        <textarea id="input" rows="2" maxlength="3500"></textarea>
+        <button type="submit" id="sendBtn" class="primary"></button>
+      </form>
+      <p id="status" class="status" role="status"></p>
+    </section>
+
+    <!-- 4. Currículo -->
+    <section id="screen-cv" class="screen" hidden>
+      <h1 id="cvTitle"></h1>
+      <div class="tabs" role="tablist">
+        <button id="tab-pt" class="tab active" data-cv="pt" role="tab"></button>
+        <button id="tab-en" class="tab" data-cv="en" role="tab"></button>
+      </div>
+      <article id="cv-pt" class="cv" lang="pt-BR" dir="ltr"></article>
+      <article id="cv-en" class="cv" lang="en" dir="ltr" hidden></article>
+      <div class="row no-print">
+        <button id="printBtn" class="primary"></button>
+      </div>
+      <div class="linkedin no-print">
+        <h2 id="linkedinTitle"></h2>
+        <textarea id="linkedinText" rows="6" readonly></textarea>
+        <button id="copyBtn" class="secondary"></button>
+      </div>
+    </section>
+  </main>
+
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
