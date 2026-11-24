@@ -1,0 +1,8 @@
+# Nunca envie chaves para o GitHub
+.env
+.env.*
+!.env.example
+
+node_modules/
+.netlify/
+.DS_Store
