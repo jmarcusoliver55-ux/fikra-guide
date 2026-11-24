@@ -96,7 +96,8 @@ async function callClaude(key, payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    console.error("Anthropic API error", res.status);
+    const detail = await res.text().catch(() => "");
+    console.error("Anthropic API error", res.status, detail.slice(0, 300));
     const err = new Error("ai error");
     err.status = res.status;
     throw err;
@@ -124,15 +125,34 @@ export async function interviewTurn(key, body) {
   let reply = textOf(content);
 
   if (!reply && applied.results.length) {
-    const second = await callClaude(key, {
-      model: MODEL,
-      max_tokens: 600,
-      system: interviewPrompt(body.lang, profile),
-      tools: INTERVIEW_TOOLS,
-      tool_choice: { type: "none" },
-      messages: [...messages, { role: "assistant", content }, { role: "user", content: applied.results }],
-    });
-    reply = textOf(second.content || []);
+    // Reenvia só os campos que a API aceita (a resposta pode trazer campos extras).
+    const echoed = content
+      .map((b) => (b.type === "text" ? { type: "text", text: b.text } : b.type === "tool_use" ? { type: "tool_use", id: b.id, name: b.name, input: b.input || {} } : null))
+      .filter(Boolean);
+    try {
+      const second = await callClaude(key, {
+        model: MODEL,
+        max_tokens: 600,
+        system: interviewPrompt(body.lang, profile),
+        tools: INTERVIEW_TOOLS,
+        tool_choice: { type: "none" },
+        messages: [...messages, { role: "assistant", content: echoed }, { role: "user", content: applied.results }],
+      });
+      reply = textOf(second.content || []);
+    } catch {
+      // Reserva: pede só a próxima mensagem, sem ferramentas, com o perfil já salvo.
+      const note = applied.confirm
+        ? "(The summary is now shown to the person. Ask them to check it and confirm or correct.)"
+        : "(Your notes were saved. Now write your next short message to the person.)";
+      const last = messages[messages.length - 1];
+      const plain = await callClaude(key, {
+        model: MODEL,
+        max_tokens: 600,
+        system: interviewPrompt(body.lang, profile),
+        messages: [...messages.slice(0, -1), { role: "user", content: last.content + "\n\n" + note }],
+      });
+      reply = textOf(plain.content || []);
+    }
   }
 
   return {
