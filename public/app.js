@@ -200,17 +200,35 @@
   function toggleMic() {
     if (!SR) { setStatus(t.micUnsupported); return; }
     if (rec) { rec.stop(); return; }
+    const before = $("input").value.trim();
+    let heard = false;
     rec = new SR();
     rec.lang = t.speech;
-    rec.interimResults = false;
+    rec.interimResults = true;   // mostra o texto enquanto a pessoa fala
+    rec.continuous = true;       // só para quando a pessoa tocar no microfone de novo
     rec.onstart = () => { $("micBtn").classList.add("on"); setStatus(t.listening); };
     rec.onresult = (e) => {
-      const said = Array.from(e.results).map((r) => r[0].transcript).join(" ");
-      $("input").value = ($("input").value + " " + said).trim();
+      heard = true;
+      const said = Array.from(e.results).map((r) => r[0].transcript).join(" ").trim();
+      $("input").value = (before + " " + said).trim();
     };
-    rec.onerror = (e) => { if (e.error === "language-not-supported") setStatus(t.micUnsupported); };
-    rec.onend = () => { $("micBtn").classList.remove("on"); if ($("status").textContent === t.listening) setStatus(""); rec = null; };
-    rec.start();
+    rec.onerror = (e) => {
+      const msg = {
+        "language-not-supported": t.micUnsupported,
+        "no-speech": t.micNoSpeech,
+        "audio-capture": t.micNoDevice,
+        "not-allowed": t.micBlocked,
+        "service-not-allowed": t.micBlocked,
+        "network": t.micNetwork,
+      }[e.error];
+      if (msg) setStatus(msg);
+    };
+    rec.onend = () => {
+      $("micBtn").classList.remove("on");
+      if ($("status").textContent === t.listening) setStatus(heard ? t.micDone : t.micNoSpeech);
+      rec = null;
+    };
+    try { rec.start(); } catch { rec = null; setStatus(t.micUnsupported); }
   }
 
   function speak(text) {
