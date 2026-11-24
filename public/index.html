@@ -25,12 +25,20 @@
     <section id="screen-consent" class="screen" hidden>
       <h1 id="consentTitle"></h1>
       <ul id="consentList" class="consent"></ul>
+      <button type="button" id="consentListen" class="secondary"></button>
       <label class="agree"><input type="checkbox" id="agreeBox"> <span id="agreeText"></span></label>
       <button id="startBtn" class="primary" disabled></button>
     </section>
 
     <!-- 3. Conversa -->
     <section id="screen-chat" class="screen" hidden>
+      <div class="chat-tools">
+        <button type="button" id="callBtn" class="secondary"></button>
+      </div>
+      <div id="callBar" class="callbar" hidden>
+        <button type="button" id="callStatus" class="callstatus" aria-live="polite"></button>
+        <button type="button" id="hangUpBtn" class="hangup"></button>
+      </div>
       <div id="messages" class="messages" aria-live="polite"></div>
 
       <div id="confirmCard" class="confirm" hidden>
@@ -41,6 +49,23 @@
           <button id="fixBtn" class="secondary"></button>
           <button id="yesBtn" class="primary"></button>
         </div>
+      </div>
+
+      <div id="limitCard" class="confirm" hidden>
+        <p id="limitText"></p>
+        <div class="row">
+          <button type="button" id="limitRestart" class="secondary"></button>
+          <button type="button" id="limitFinish" class="primary"></button>
+        </div>
+      </div>
+
+      <button type="button" id="finishBtn" class="secondary finish" hidden></button>
+
+      <div id="recBar" class="recbar" hidden>
+        <span class="dot" aria-hidden="true"></span>
+        <span id="recPreview" class="preview" aria-live="polite"></span>
+        <button type="button" id="recCancel" class="secondary"></button>
+        <button type="button" id="recSend" class="primary"></button>
       </div>
 
       <form id="composer" class="composer">
