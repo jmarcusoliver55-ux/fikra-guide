@@ -4,9 +4,10 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const API = "/api/agent";
-  const MAX_MESSAGES = 40;
+  const MAX_MESSAGES = 60;            // igual ao limite do servidor
+  const WARN_AT = MAX_MESSAGES - 6;   // mostra as opções antes de chegar ao limite
 
-  const state = { lang: null, messages: [], profile: null, busy: false, cv: null };
+  const state = { lang: null, messages: [], profile: {}, busy: false, cv: null, call: false };
   let t = window.I18N.en;
 
   // ---------- telas ----------
@@ -21,24 +22,35 @@
     t = window.I18N[lang];
     document.documentElement.lang = t.speech;
     document.documentElement.dir = t.dir;
-    $("consentTitle").textContent = t.consentTitle;
+    const set = (id, text) => ($(id).textContent = text);
+    set("consentTitle", t.consentTitle);
     $("consentList").replaceChildren(...t.consent.map((p) => el("li", {}, p)));
-    $("agreeText").textContent = t.agree;
-    $("startBtn").textContent = t.start;
+    set("agreeText", t.agree);
+    set("startBtn", t.start);
+    set("consentListen", "🔊 " + t.listen);
     $("input").placeholder = t.placeholder;
-    $("sendBtn").textContent = t.send;
-    $("micBtn").textContent = "🎤 " + t.mic;
-    $("confirmTitle").textContent = t.confirmTitle;
-    $("listenBtn").textContent = "🔊 " + t.listen;
-    $("yesBtn").textContent = t.confirmYes;
-    $("fixBtn").textContent = t.confirmFix;
-    $("cvTitle").textContent = t.cvTitle;
-    $("printBtn").textContent = t.print;
-    $("linkedinTitle").textContent = t.linkedin;
-    $("copyBtn").textContent = t.copy;
-    $("deleteAll").textContent = t.deleteAll;
-    $("tab-pt").textContent = window.CV_LABELS.pt.tab;
-    $("tab-en").textContent = window.CV_LABELS.en.tab;
+    set("sendBtn", t.send);
+    set("callBtn", "📞 " + t.call);
+    set("hangUpBtn", t.hangUp);
+    set("recCancel", "✖ " + t.cancel);
+    set("recSend", "➤ " + t.sendAudio);
+    set("finishBtn", "✅ " + t.finish);
+    set("confirmTitle", t.confirmTitle);
+    set("listenBtn", "🔊 " + t.listen);
+    set("yesBtn", t.confirmYes);
+    set("fixBtn", t.confirmFix);
+    set("limitText", t.limitTitle);
+    set("limitFinish", "✅ " + t.finish);
+    set("limitRestart", t.restart);
+    set("cvTitle", t.cvTitle);
+    set("printBtn", t.print);
+    set("linkedinTitle", t.linkedin);
+    set("copyBtn", t.copy);
+    set("deleteAll", t.deleteAll);
+    set("tab-pt", window.CV_LABELS.pt.tab);
+    set("tab-en", window.CV_LABELS.en.tab);
+    $("micBtn").setAttribute("aria-label", t.mic);
+    renderMic();
   }
 
   // ---------- utilidades ----------
@@ -52,8 +64,7 @@
 
   function setBusy(b) {
     state.busy = b;
-    $("sendBtn").disabled = b;
-    $("yesBtn").disabled = b;
+    for (const id of ["sendBtn", "yesBtn", "finishBtn", "limitFinish", "micBtn"]) $(id).disabled = b;
     $("input").disabled = b;
   }
 
@@ -68,76 +79,273 @@
     return data;
   }
 
-  // ---------- perfil ----------
-  const PROFILE_RE = /<profile>([\s\S]*?)<\/profile>/gi;
+  // ---------- fala (texto para voz) ----------
+  const canSpeak = "speechSynthesis" in window;
 
-  function extractProfile(text) {
-    let match, last = null;
-    PROFILE_RE.lastIndex = 0;
-    while ((match = PROFILE_RE.exec(text))) last = match[1];
-    const visible = text.replace(PROFILE_RE, "").trim();
-    if (!last) return { visible, profile: null };
-    try {
-      return { visible, profile: JSON.parse(last.trim()) };
-    } catch {
-      return { visible, profile: null };
+  function pickVoice() {
+    if (!canSpeak) return null;
+    const voices = speechSynthesis.getVoices();
+    const wanted = [t.speech.toLowerCase(), t.speech.slice(0, 2).toLowerCase(), ...(t.voiceFallback ? [t.voiceFallback] : [])];
+    for (const w of wanted) {
+      const v = voices.find((x) => x.lang.toLowerCase().replace("_", "-").startsWith(w));
+      if (v) return v;
     }
+    return null;
+  }
+
+  // Fala o texto e chama onDone uma única vez quando termina (com reserva de tempo,
+  // porque alguns navegadores não avisam o fim da fala).
+  function speak(text, onDone) {
+    let done = false;
+    const finish = () => { if (!done) { done = true; clearTimeout(timer); onDone && onDone(); } };
+    const timer = setTimeout(finish, 4000 + (text || "").length * 90);
+    if (!canSpeak || !text) { finish(); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice();
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = t.speech; }
+    u.onend = finish;
+    u.onerror = finish;
+    speechSynthesis.speak(u);
+  }
+  const stopSpeaking = () => canSpeak && speechSynthesis.cancel();
+
+  // ---------- escuta (voz para texto) ----------
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // Junta os trechos reconhecidos sem repetir: no Android o navegador às vezes
+  // devolve o mesmo trecho mais de uma vez, ou o texto acumulado de novo.
+  function collect(results) {
+    let text = "";
+    for (const r of results) {
+      const s = (r[0]?.transcript || "").trim();
+      if (!s) continue;
+      const a = text.toLowerCase(), b = s.toLowerCase();
+      if (!text || b.startsWith(a)) text = s;
+      else if (a.endsWith(b) || a.includes(b)) continue;
+      else text = text + " " + s;
+    }
+    return text.trim();
+  }
+
+  const MIC_ERRORS = () => ({
+    "language-not-supported": t.micUnsupported,
+    "no-speech": t.micNoSpeech,
+    "audio-capture": t.micNoDevice,
+    "not-allowed": t.micBlocked,
+    "service-not-allowed": t.micBlocked,
+    "network": t.micNetwork,
+  });
+
+  // Abre o microfone. onEnd(texto, erro) é chamado UMA vez, quando termina.
+  // Depois disso, qualquer resultado atrasado é ignorado (evita texto voltando).
+  function listen({ continuous, onPreview, onEnd }) {
+    const rec = new SR();
+    let results = [], error = null, closed = false, cancelled = false;
+    rec.lang = t.speech;
+    rec.interimResults = true;
+    rec.continuous = continuous;
+    rec.onresult = (e) => {
+      if (closed) return;
+      results = Array.from(e.results);
+      onPreview && onPreview(collect(results));
+    };
+    rec.onerror = (e) => { error = e.error; };
+    rec.onend = () => {
+      if (closed) return;
+      closed = true;
+      onEnd(cancelled ? "" : collect(results), cancelled ? null : error);
+    };
+    try { rec.start(); } catch { closed = true; onEnd("", "start-failed"); }
+    return {
+      stop() { try { rec.stop(); } catch { /* já parado */ } },
+      cancel() { cancelled = true; try { rec.abort(); } catch { /* já parado */ } },
+    };
+  }
+
+  // ---------- áudio estilo WhatsApp: toca, fala, toca de novo e envia ----------
+  let note = null;
+
+  function renderMic() {
+    const recording = !!note;
+    $("micBtn").textContent = recording ? "⏹" : "🎤";
+    $("micBtn").classList.toggle("on", recording);
+    $("recBar").hidden = !recording;
+    $("composer").classList.toggle("recording", recording);
+  }
+
+  function startNote() {
+    if (!SR) { setStatus(t.micUnsupported); return; }
+    if (state.busy) return;
+    stopSpeaking();
+    setStatus("");
+    $("recPreview").textContent = t.recording;
+    note = listen({
+      continuous: true,
+      onPreview: (text) => ($("recPreview").textContent = text || t.recording),
+      onEnd: (text, error) => {
+        const wasSending = note && note.sending;
+        note = null;
+        renderMic();
+        if (!wasSending) { if (error && error !== "aborted") setStatus(MIC_ERRORS()[error] || ""); return; }
+        if (text) sendUser(text, { audio: true });
+        else setStatus(MIC_ERRORS()[error] || t.micNoSpeech);
+      },
+    });
+    renderMic();
+  }
+
+  function sendNote() { if (note) { note.sending = true; note.stop(); } }
+  function cancelNote() { if (note) { note.cancel(); } }
+
+  // ---------- conversa por voz (como uma chamada) ----------
+  let callRec = null;
+  let silentTries = 0;
+
+  function renderCall() {
+    $("callBar").hidden = !state.call;
+    $("callBtn").hidden = state.call || !SR;
+    $("micBtn").hidden = state.call;
+  }
+
+  function startCall() {
+    if (!SR) { setStatus(t.micUnsupported); return; }
+    cancelNote();
+    state.call = true;
+    silentTries = 0;
+    renderCall();
+    const last = [...state.messages].reverse().find((m) => m.role === "assistant");
+    if (!$("confirmCard").hidden) speak(t.confirmTitle + " " + $("confirmSummary").textContent + " " + t.sayYes, callListen);
+    else if (last) speak(last.content, callListen);
+    else callListen();
+  }
+
+  function endCall() {
+    state.call = false;
+    if (callRec) { callRec.cancel(); callRec = null; }
+    stopSpeaking();
+    $("callStatus").textContent = "";
+    renderCall();
+    setStatus("");
+  }
+
+  function isYes(text) {
+    const s = text.toLowerCase().replace(/[.,!?¡¿،]/g, " ").trim();
+    return (t.yesWords || []).some((w) => s === w || s.startsWith(w + " "));
+  }
+
+  function callListen() {
+    if (!state.call || state.busy) return;
+    $("callStatus").textContent = "🎤 " + t.callListening;
+    callRec = listen({
+      continuous: false, // termina sozinho quando a pessoa faz uma pausa
+      onPreview: (text) => ($("callStatus").textContent = "🎤 " + (text || t.callListening)),
+      onEnd: (text, error) => {
+        callRec = null;
+        if (!state.call) return;
+        if (text) {
+          silentTries = 0;
+          $("callStatus").textContent = t.thinking;
+          if (!$("confirmCard").hidden && isYes(text)) { addBubble("user", "🎤 " + text); generateCv(); }
+          else sendUser(text, { audio: true });
+          return;
+        }
+        if (error && !["no-speech", "aborted"].includes(error)) {
+          $("callStatus").textContent = MIC_ERRORS()[error] || t.micNoSpeech;
+          return;
+        }
+        silentTries += 1;
+        if (silentTries < 3) callListen();
+        else $("callStatus").textContent = t.tapToTalk;
+      },
+    });
+  }
+
+  // Depois de cada resposta do agente durante a chamada: fala e volta a ouvir.
+  function callSay(text) {
+    if (!state.call) return;
+    $("callStatus").textContent = "🔊 " + t.speaking;
+    speak(text, callListen);
   }
 
   // ---------- conversa ----------
   function addBubble(role, text) {
     const b = el("div", { class: "msg " + role }, text);
+    if (role === "assistant" && canSpeak) {
+      const again = el("button", { type: "button", class: "replay", "aria-label": t.listen }, "🔊");
+      again.addEventListener("click", () => speak(text));
+      b.append(again);
+    }
     $("messages").append(b);
     b.scrollIntoView({ block: "end", behavior: "smooth" });
   }
 
-  async function sendUser(text, { hidden = false } = {}) {
-    if (state.busy || !text.trim()) return;
-    if (state.messages.length + 1 > MAX_MESSAGES) { setStatus(t.tooLong); return; }
-    state.messages.push({ role: "user", content: text.trim() });
-    if (!hidden) addBubble("user", text.trim());
-    setBusy(true);
-    setStatus(t.thinking);
-    try {
-      const { reply } = await callAgent({ mode: "interview", lang: state.lang, messages: state.messages });
-      state.messages.push({ role: "assistant", content: reply });
-      const { visible, profile } = extractProfile(reply);
-      if (visible) addBubble("assistant", visible);
-      if (profile) showConfirm(profile);
-      setStatus("");
-    } catch {
-      state.messages.pop(); // permite reenviar
-      setStatus(t.error);
-    } finally {
-      setBusy(false);
-      $("input").focus();
-    }
+  function updateControls() {
+    $("finishBtn").hidden = !state.profile.name || !$("confirmCard").hidden;
+    $("limitCard").hidden = state.messages.length < WARN_AT;
   }
 
-  function showConfirm(profile) {
-    state.profile = profile;
-    $("confirmSummary").textContent = profile.summary_user_language || "";
+  async function sendUser(text, { hidden = false, audio = false } = {}) {
+    text = (text || "").trim();
+    if (state.busy || !text) return;
+    if (state.messages.length + 1 > MAX_MESSAGES) { updateControls(); setStatus(t.tooLong); return; }
+    state.messages.push({ role: "user", content: text });
+    if (!hidden) addBubble("user", (audio ? "🎤 " : "") + text);
+    setBusy(true);
+    setStatus(t.thinking);
+    let spoken = "";
+    try {
+      const data = await callAgent({ mode: "interview", lang: state.lang, messages: state.messages, profile: state.profile });
+      if (data.profile) state.profile = data.profile;
+      if (data.reply) {
+        state.messages.push({ role: "assistant", content: data.reply });
+        addBubble("assistant", data.reply);
+        spoken = data.reply;
+      }
+      if (data.confirm) {
+        showConfirm(data.confirm.summary_user_language);
+        spoken = [spoken, t.confirmTitle, data.confirm.summary_user_language, t.sayYes].filter(Boolean).join(" ");
+      }
+      setStatus("");
+    } catch {
+      state.messages.pop();
+      if (!hidden && !audio) $("input").value = text;  // texto digitado volta para reenviar
+      setStatus(t.error);
+      spoken = t.error;
+    } finally {
+      setBusy(false);
+      updateControls();
+    }
+    if (state.call) callSay(spoken);
+  }
+
+  function showConfirm(summary) {
+    $("confirmSummary").textContent = summary || "";
     $("confirmCard").hidden = false;
+    updateControls();
     $("confirmCard").scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
   // ---------- currículo ----------
   async function generateCv() {
-    if (!state.profile || state.busy) return;
+    if (!state.profile.name || state.busy) return;
     setBusy(true);
     setStatus(t.generating);
+    if (state.call) { $("callStatus").textContent = t.generating; }
     try {
-      const { summary_user_language, ...profile } = state.profile;
-      const { cv } = await callAgent({ mode: "cv", lang: state.lang, profile });
+      const { cv } = await callAgent({ mode: "cv", lang: state.lang, profile: state.profile });
       state.cv = cv;
       renderCv("pt", cv.pt);
       renderCv("en", cv.en);
-      $("linkedinText").value = cv.pt.linkedin_about || "";
       selectTab("pt");
       setStatus("");
+      const wasCall = state.call;
+      endCall();
       show("cv");
+      if (wasCall) speak(t.cvReady);
     } catch {
       setStatus(t.error);
+      if (state.call) callSay(t.error);
     } finally {
       setBusy(false);
     }
@@ -159,12 +367,11 @@
 
     if (d.summary) section(L.summary, [el("p", {}, d.summary)]);
 
-    section(L.experience, (d.experience || []).map((x) => {
+    section(L.experience, (d.experience || []).filter((x) => x.role).map((x) => {
       const sub = [x.place, x.country, x.period].filter(Boolean).join(" · ");
-      const ul = (x.bullets || []).filter(Boolean).length
-        ? el("ul", {}, ...x.bullets.filter(Boolean).map((b) => el("li", {}, b)))
-        : null;
-      return el("div", { class: "item" }, el("strong", {}, x.role || ""), sub ? el("span", { class: "sub" }, sub) : null, ul);
+      const bullets = (x.bullets || []).filter(Boolean);
+      const ul = bullets.length ? el("ul", {}, ...bullets.map((b) => el("li", {}, b))) : null;
+      return el("div", { class: "item" }, el("strong", {}, x.role), sub ? el("span", { class: "sub" }, sub) : null, ul);
     }));
 
     section(L.education, (d.education || []).filter((x) => x.course).map((x) => {
@@ -193,56 +400,11 @@
     if (state.cv) $("linkedinText").value = state.cv[lang].linkedin_about || "";
   }
 
-  // ---------- voz ----------
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null;
-
-  function toggleMic() {
-    if (!SR) { setStatus(t.micUnsupported); return; }
-    if (rec) { rec.stop(); return; }
-    const before = $("input").value.trim();
-    let heard = false;
-    rec = new SR();
-    rec.lang = t.speech;
-    rec.interimResults = true;   // mostra o texto enquanto a pessoa fala
-    rec.continuous = true;       // só para quando a pessoa tocar no microfone de novo
-    rec.onstart = () => { $("micBtn").classList.add("on"); setStatus(t.listening); };
-    rec.onresult = (e) => {
-      heard = true;
-      const said = Array.from(e.results).map((r) => r[0].transcript).join(" ").trim();
-      $("input").value = (before + " " + said).trim();
-    };
-    rec.onerror = (e) => {
-      const msg = {
-        "language-not-supported": t.micUnsupported,
-        "no-speech": t.micNoSpeech,
-        "audio-capture": t.micNoDevice,
-        "not-allowed": t.micBlocked,
-        "service-not-allowed": t.micBlocked,
-        "network": t.micNetwork,
-      }[e.error];
-      if (msg) setStatus(msg);
-    };
-    rec.onend = () => {
-      $("micBtn").classList.remove("on");
-      if ($("status").textContent === t.listening) setStatus(heard ? t.micDone : t.micNoSpeech);
-      rec = null;
-    };
-    try { rec.start(); } catch { rec = null; setStatus(t.micUnsupported); }
-  }
-
-  function speak(text) {
-    if (!("speechSynthesis" in window) || !text) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = t.speech;
-    speechSynthesis.speak(u);
-  }
-
   // ---------- apagar tudo ----------
   function deleteAll() {
     if (!confirm(t.deleteConfirm)) return;
-    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    endCall();
+    cancelNote();
     location.reload(); // a memória da aba é descartada; nada foi salvo em servidor
   }
 
@@ -252,9 +414,11 @@
     b.addEventListener("click", () => { applyLanguage(code); show("consent"); });
     return b;
   }));
+  if (canSpeak) speechSynthesis.getVoices(); // carrega a lista de vozes
 
+  $("consentListen").addEventListener("click", () => speak([t.consentTitle, ...t.consent, t.agree].join(". ")));
   $("agreeBox").addEventListener("change", (e) => ($("startBtn").disabled = !e.target.checked));
-  $("startBtn").addEventListener("click", () => { show("chat"); sendUser(t.starter, { hidden: true }); });
+  $("startBtn").addEventListener("click", () => { show("chat"); renderCall(); sendUser(t.starter, { hidden: true }); });
   $("composer").addEventListener("submit", (e) => {
     e.preventDefault();
     const text = $("input").value;
@@ -264,9 +428,17 @@
   $("input").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); }
   });
-  $("micBtn").addEventListener("click", toggleMic);
+  $("micBtn").addEventListener("click", () => (note ? sendNote() : startNote()));
+  $("recSend").addEventListener("click", sendNote);
+  $("recCancel").addEventListener("click", cancelNote);
+  $("callBtn").addEventListener("click", startCall);
+  $("hangUpBtn").addEventListener("click", endCall);
+  $("callStatus").addEventListener("click", () => { if (state.call && !callRec && !state.busy) { silentTries = 0; callListen(); } });
+  $("finishBtn").addEventListener("click", () => sendUser(t.finishNow, { hidden: true }));
+  $("limitFinish").addEventListener("click", () => sendUser(t.finishNow, { hidden: true }));
+  $("limitRestart").addEventListener("click", deleteAll);
   $("listenBtn").addEventListener("click", () => speak($("confirmSummary").textContent));
-  $("fixBtn").addEventListener("click", () => { $("confirmCard").hidden = true; setStatus(t.fixHint); $("input").focus(); });
+  $("fixBtn").addEventListener("click", () => { $("confirmCard").hidden = true; updateControls(); setStatus(t.fixHint); $("input").focus(); });
   $("yesBtn").addEventListener("click", generateCv);
   $("tab-pt").addEventListener("click", () => selectTab("pt"));
   $("tab-en").addEventListener("click", () => selectTab("en"));
