@@ -51,3 +51,8 @@ No plano grátis do Netlify são 300 créditos por mês, e cada publicação em 
 - Textos em **crioulo haitiano e árabe** (`public/i18n.js`) precisam de revisão por falante nativo.
 - O termo de consentimento precisa de revisão por alguém que conheça a LGPD.
 - Veja o protocolo completo na seção *Normas e conformidade* do documento do projeto.
+
+
+## Nota sobre a estrutura
+
+A função do agente fica em `netlify/functions/agent/` (agent.mjs e prompts.mjs juntos), para o Netlify reconhecer uma função só.
